@@ -3,12 +3,13 @@
 		Centax by @umbrix | Licensed under the "MIT" license.
 		Discord: umb.rph
 		Github: https://www.github.com/umbrix-dev/centax
+		Asset: https://create.roblox.com/store/asset/91565758305206
 	
 	// Description
-		A simple to use shared context module.
-		Create, listen and manage existing events like "Players.PlayerAdded"
-		or custom events in a shared context which you can access from the same side
-		it got created in e.g. server or client.
+		Centax is a simple to use shared event manager.
+		Wrap existing Roblox signals like "Players.PlayerAdded"
+		or create custom events and listen to them from anywhere,
+		without scattered connections.
 	
 	// API
 		- insert(eventName: string, signal: RBXScriptSignal?) -> { destroy: () -> () }
@@ -19,7 +20,6 @@
 		- clear(eventName: string?)
 		- destroy(eventName: string)
 		- once<T...>(eventName: string, callback: (T...) -> ())
-		- build()
 		
 	// Examples usage (server)
 	```
@@ -61,7 +61,7 @@ local Centax = {}
 
 local server = {}
 local client = {}
-local connections: { RBXScriptConnection } = {}
+local connections: { [string]: RBXScriptConnection } = {}
 
 local function getSide(): Side
 	if RunService:IsServer() then
@@ -71,6 +71,24 @@ local function getSide(): Side
 	end
 end
 
+local function centaxError(message: string?)
+	error("[Centax]: " .. tostring(message or "Error"))
+end
+
+local errors = {
+	eventExists = function(eventName: string)
+		centaxError("Event: " .. eventName .. " already exists")
+	end,
+	
+	eventNoExist = function(eventName: string)
+		centaxError("Event: " .. eventName .. " doesn't exist")
+	end,
+	
+	nonCustomEvent = function(eventName: string)
+		centaxError("Cannot fire non-custom event with signal: " .. eventName)
+	end,
+}
+
 --[[
 	Inserts an event with or without a signal.
 	You can listen to an inserted event using 'Centax.listen("event name", callback)'.
@@ -79,14 +97,25 @@ end
 	Returns a destroy function to completely remove the event.
 ]]
 function Centax.insert(eventName: string, signal: RBXScriptSignal?): { destroy: () -> () }
+	if Centax.exists(eventName) then
+		errors.eventExists(eventName)
+	end
+	
 	local data: Handler = {
 		Event = signal or "Custom",
 		Callbacks = {}
 	}
 	
-	getSide()[eventName] = data
+	local side = getSide()
+	side[eventName] = data
 	
-	Centax.build()
+	if signal then
+		connections[eventName] = signal:Connect(function(...)
+			for _, callback in ipairs(side[eventName].Callbacks) do
+				callback(...)
+			end
+		end)
+	end
 	
 	return {
 		destroy = function()
@@ -98,15 +127,15 @@ end
 -- Fires a event without a signal also called an custom event.
 function Centax.fire<T...>(eventName: string, ...: T...)
 	if not Centax.exists(eventName) then
-		return
+		errors.eventNoExist(eventName)
 	end
 	
 	local handler: Handler = getSide()[eventName]
 	if handler.Event ~= "Custom" then
-		return
+		errors.nonCustomEvent(eventName)
 	end
 	
-	for _, callback in pairs(handler.Callbacks) do
+	for _, callback in ipairs(handler.Callbacks) do
 		callback(...)
 	end
 end
@@ -116,12 +145,7 @@ end
 	Returns a boolean to let you know.
 ]]
 function Centax.exists(eventName: string): boolean
-	local side = getSide()
-	if not side[eventName] then
-		return false
-	else
-		return true
-	end
+	return getSide()[eventName] ~= nil
 end
 
 --[[
@@ -129,9 +153,9 @@ end
 	Will work on events with and without a signal.
 	Returns a cancel function which will remove the callback from the event or nil when the event was not found.
 ]]
-function Centax.listen<T...>(eventName: string, callback: (T...) -> ()): { cancel: () -> () }?
+function Centax.listen<T...>(eventName: string, callback: (T...) -> ()): { cancel: () -> () }
 	if not Centax.exists(eventName) then
-		return nil
+		errors.eventNoExist(eventName)
 	end
 
 	local callbacks = getSide()[eventName].Callbacks
@@ -144,9 +168,12 @@ function Centax.listen<T...>(eventName: string, callback: (T...) -> ()): { cance
 	}
 end
 
-
 -- Remove a event listener / callback from an event.
 function Centax.cancel<T...>(eventName: string, callback: (T...) -> ())
+	if not Centax.exists(eventName) then
+		errors.eventNoExist(eventName)
+	end
+	
 	local callbacks = getSide()[eventName].Callbacks
 	local index = table.find(callbacks, callback :: (...any) -> ())
 	if not index then
@@ -162,7 +189,7 @@ function Centax.clear(eventName: string?)
 	
 	if eventName then
 		if not Centax.exists(eventName) then
-			return
+			errors.eventNoExist(eventName)
 		end
 		
 		local handler: Handler = side[eventName]
@@ -177,8 +204,14 @@ end
 -- Remove a event
 function Centax.destroy(eventName: string)
 	if Centax.exists(eventName) then
+		if connections[eventName] then
+			connections[eventName]:Disconnect()
+			connections[eventName] = nil
+		end
+		
 		getSide()[eventName] = nil
-		Centax.build()
+	else
+		errors.eventNoExist(eventName)
 	end
 end
 
@@ -191,30 +224,6 @@ function Centax.once<T...>(eventName: string, callback: (T...) -> ())
 	end
 	
 	Centax.listen(eventName, newCallback)
-end
-
--- Clean and build all connections and connect their callbacks.
--- Will be executed automatically when inserting or destroying a event.
-function Centax.build()
-	for _, connection: RBXScriptConnection in pairs(connections) do
-		connection:Disconnect()
-	end
-	
-	table.clear(connections)
-	
-	for _, handler: Handler in pairs(getSide()) do
-		if handler.Event == "Custom" then
-			continue
-		end
-		
-		local connection = handler.Event:Connect(function(...)
-			for _, callback in pairs(handler.Callbacks) do
-				callback(...)
-			end
-		end)
-		
-		table.insert(connections, connection)
-	end
 end
 
 return Centax
