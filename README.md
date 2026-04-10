@@ -18,7 +18,7 @@ local Centax = require(ReplicatedStorage.Centax)
 
 local Players = game:GetService("Players")
 
-Centax.insert("PlayerRemoving", Players.PlayerAdded)
+Centax.insert("PlayerRemoving", Players.PlayerRemoving)
 
 Centax.listen("PlayerRemoving", function(player: Player)
     print(player.Name, "left!")
