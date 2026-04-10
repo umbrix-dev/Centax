@@ -1,10 +1,4 @@
 --[[
-	// Project
-		Centax by @umbrix | Licensed under the "MIT" license.
-		Discord: umb.rph
-		Github: https://www.github.com/umbrix-dev/centax
-		Asset: https://create.roblox.com/store/asset/91565758305206
-	
 	// Description
 		Centax is a simple to use shared event manager.
 		Wrap existing Roblox signals like "Players.PlayerAdded"
@@ -98,7 +92,7 @@ local errors = {
 ]]
 function Centax.insert(eventName: string, signal: RBXScriptSignal?): { destroy: () -> () }
 	if Centax.exists(eventName) then
-		errors.eventExists(eventName)
+		Centax.destroy(eventName)
 	end
 	
 	local data: Handler = {
@@ -111,7 +105,7 @@ function Centax.insert(eventName: string, signal: RBXScriptSignal?): { destroy: 
 	
 	if signal then
 		connections[eventName] = signal:Connect(function(...)
-			for _, callback in ipairs(side[eventName].Callbacks) do
+			for _, callback in ipairs(table.clone(side[eventName].Callbacks)) do
 				callback(...)
 			end
 		end)
@@ -135,7 +129,7 @@ function Centax.fire<T...>(eventName: string, ...: T...)
 		errors.nonCustomEvent(eventName)
 	end
 	
-	for _, callback in ipairs(handler.Callbacks) do
+	for _, callback in ipairs(table.clone(handler.Callbacks)) do
 		callback(...)
 	end
 end
