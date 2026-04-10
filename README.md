@@ -1,4 +1,4 @@
-# Centax
+![Centax](https://github.com/umbrix-dev/Centax/blob/main/BANNER.png)
 A simple, lightweight shared event manager for Roblox Studio.
 
 Instead of scattering connections across scripts, Centax gives you a single central place
