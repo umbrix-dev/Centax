@@ -24,7 +24,7 @@ Centax.insert("PlayerRemoving", Players.PlayerRemoving)
 -- Script B
 Centax.listen("PlayerRemoving", function(player: Player)
     print(player.Name, "left!")
-end)
+end, 1) -- Optional Priority
 ```
 
 One-time listener
