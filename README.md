@@ -18,8 +18,10 @@ local Centax = require(ReplicatedStorage.Centax)
 
 local Players = game:GetService("Players")
 
+-- Script A
 Centax.insert("PlayerRemoving", Players.PlayerRemoving)
 
+-- Script B
 Centax.listen("PlayerRemoving", function(player: Player)
     print(player.Name, "left!")
 end)
