@@ -11,46 +11,8 @@ download the .rblxm file from the [**Latest releases page**](https://github.com/
 then just drag and drop it anywhere into Roblox Studio.
 
 ## Usage
-Wrapping a Roblox Studio signal
-```luau
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Centax = require(ReplicatedStorage.Centax)
-
-local Players = game:GetService("Players")
-
--- Script A
-Centax.insert("PlayerRemoving", Players.PlayerRemoving)
-
--- Script B
-Centax.listen("PlayerRemoving", function(player: Player)
-    print(player.Name, "left!")
-end, 1) -- Optional Priority
-```
-
-One-time listener
-```luau
-Centax.once("PlayerRemoving", function(player: Player)
-    print("First player to leave:", player.Name)
-end)
-```
-
-Removing a listener
-```luau
-local listener = Centax.listen("PlayerRemoving", function(player: Player)
-    print(player.Name)
-end)
-
-listener.cancel()
-```
-
-Removing an event
-```luau
-local event = Centax.insert("Heartbeat", RunService.Heartbeat)
-
-event.destroy()
--- or
-Centax.destroy("Heartbeat")
-```
+For the whole usage guide see: [USAGE.md](https://github.com/umbrix-dev/Centax/blob/main/USAGE.md)
+#
 
 > [!NOTE]
 > Server and client each have their own isolated context, events created on the server are not accessible from the client and vice versa.
