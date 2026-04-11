@@ -12,6 +12,7 @@
 	// API
 		- insert(eventName: string, signal: RBXScriptSignal?) -> { destroy: () -> () }
 		- exists(eventName: string): boolean
+		- yield(eventName: string, timeout: number?): boolean
 		- listen<T...>(eventName: string, callback: (T...) -> ()): { cancel: () -> () }?
 		- cancel<T...>(eventName: string, callback: (T...) -> ())
 		- clear(eventName: string?)
@@ -49,7 +50,7 @@ local RunService = game:GetService("RunService")
 
 type Handler = {
 	Event: RBXScriptSignal,
-	Callbacks: { (...any) -> () }
+	Callbacks: { { callback: (...any) -> (), priority: number } }
 }
 
 type Side = { [string]: Handler }
@@ -110,8 +111,8 @@ function Centax.insert(eventName: string, signal: RBXScriptSignal): { destroy: (
 	
 	if signal then
 		connections[eventName] = signal:Connect(function(...)
-			for _, callback in ipairs(table.clone(side[eventName].Callbacks)) do
-				callback(...)
+			for _, callbackData in ipairs(table.clone(side[eventName].Callbacks)) do
+				callbackData.callback(...)
 			end
 		end)
 	end
@@ -132,16 +133,60 @@ function Centax.exists(eventName: string): boolean
 end
 
 --[[
+	Yields the current thread until the event exists or the timeout is reached.
+	Returns true if found, false if timed out. Yields indefinitely when no timeout is given.
+]]
+function Centax.yield(eventName: string, timeout: number?): boolean
+	local elapsed = 0
+	while not Centax.exists(eventName) do
+		elapsed += task.wait()
+		if timeout and elapsed >= timeout then
+			return false
+		end
+	end
+	
+	return true
+end
+
+--[[
 	Listen to a specific event and attach a callback that will run once it fires.
+	Priority: 1 = Highest.
 	Returns a cancel function which will remove the callback from the event or nil when the event was not found.
 ]]
-function Centax.listen<T...>(eventName: string, callback: (T...) -> ()): { cancel: () -> () }
+function Centax.listen<T...>(eventName: string, callback: (T...) -> (), priority: number?): { cancel: () -> () }
 	if not Centax.exists(eventName) then
 		errors.eventNoExist(eventName)
 	end
 
-	local callbacks = getSide()[eventName].Callbacks
-	table.insert(callbacks, callback :: (...any) -> ())
+	priority = priority or math.huge
+	local inserted = false
+	
+	local callbackDatas = getSide()[eventName].Callbacks
+	local function insert(index: number?)
+		local data = {
+			callback = callback :: (...any) -> (),
+			priority = priority :: number,
+		}
+		
+		if index then
+			table.insert(callbackDatas, index, data)
+		else
+			table.insert(callbackDatas, data)
+		end
+	end
+	
+	
+	for index, callbackData in ipairs(callbackDatas) do
+		if callbackData.priority > priority then
+			insert(index)
+			inserted = true
+			break
+		end
+	end
+	
+	if not inserted then
+		insert()
+	end
 	
 	return {
 		cancel = function()
@@ -156,13 +201,12 @@ function Centax.cancel<T...>(eventName: string, callback: (T...) -> ())
 		errors.eventNoExist(eventName)
 	end
 	
-	local callbacks = getSide()[eventName].Callbacks
-	local index = table.find(callbacks, callback :: (...any) -> ())
-	if not index then
-		return
+	local callbackDatas = getSide()[eventName].Callbacks
+	for index = #callbackDatas, 1, -1 do
+		if callbackDatas[index].callback == callback then
+			table.remove(callbackDatas, index)
+		end
 	end
-	
-	table.remove(callbacks, index)
 end
 
 -- Clear all or a specific event's callbacks
@@ -198,14 +242,14 @@ function Centax.destroy(eventName: string)
 end
 
 -- Similar to "Centax.listen" but will cancel itself after being fired.
-function Centax.once<T...>(eventName: string, callback: (T...) -> ())
+function Centax.once<T...>(eventName: string, callback: (T...) -> (), priority: number?)
 	local newCallback
 	newCallback = function(...)
 		callback(...)
 		Centax.cancel(eventName, newCallback :: (...any) -> ())
 	end
 	
-	Centax.listen(eventName, newCallback)
+	Centax.listen(eventName, newCallback, priority)
 end
 
 return Centax
